@@ -16,4 +16,5 @@ services:
     volumes:
       - ./config.json:/app/config.json:ro
       - ./cookie.json:/data/cookie.json:ro
+      - ./config:/app/config:ro
       - ./artifacts:/app/artifacts

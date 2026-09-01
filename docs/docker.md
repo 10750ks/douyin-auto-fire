@@ -1,26 +1,32 @@
 # Docker 部署教程
 
-本教程介绍如何使用 Docker 部署 `douyin-auto-fire`。
+本教程介绍如何使用 Docker 部署 `douyin-auto-fire`，支持单账号、多账号、钉钉通知和容器内 Cron 定时运行。
 
 项目提供两套公共镜像：
 
 - 国内环境推荐：`docker.cnb.cool/1mev/douyin-auto-fire:latest`
 - 海外环境推荐：`ghcr.io/unmev/douyin-auto-fire:latest`
 
-两套镜像内容一致，只是镜像仓库不同。Python、Playwright、Chromium 和项目代码都已经封装进 Docker 镜像，**Docker 部署不需要下载完整源码仓库**。
+两套镜像内容一致，只是镜像仓库不同。Python、Playwright、Chromium 和项目代码都已经封装进镜像，**Docker 部署不需要下载完整源码仓库**。
+
+> 第一次使用建议先配置 1 个账号、1 个好友、1 条文字消息，并先执行 Dry Run。单账号确认正常后，再增加多账号、原生表情、随机消息或钉钉通知。
+
+---
 
 ## 1. 准备部署目录
 
 ```bash
-mkdir -p ~/douyin-auto-fire/artifacts
+mkdir -p ~/douyin-auto-fire/artifacts ~/douyin-auto-fire/config
 cd ~/douyin-auto-fire
 ```
+
+---
 
 ## 2. 下载 Compose 文件
 
 ### 国内服务器（推荐）
 
-只从 CNB 下载一个 `docker-compose.yml`，不需要 `git clone` 整个仓库：
+只从 CNB 下载一个 `docker-compose.yml`：
 
 ```bash
 curl -fL https://cnb.cool/1mev/douyin-auto-fire/-/git/raw/main/docker-compose.yml -o docker-compose.yml
@@ -32,16 +38,9 @@ curl -fL https://cnb.cool/1mev/douyin-auto-fire/-/git/raw/main/docker-compose.ym
 docker.cnb.cool/1mev/douyin-auto-fire:latest
 ```
 
-因此国内部署时：
-
-- Compose 文件从 CNB 下载；
-- Docker 镜像从 CNB 拉取；
-- 不需要访问 GitHub Raw；
-- 不需要下载完整源码仓库。
+整个 Docker 部署过程不需要 `git clone` 完整仓库。
 
 ### 海外服务器
-
-海外环境只下载海外 Compose 文件：
 
 ```bash
 curl -fL https://raw.githubusercontent.com/unmev/douyin-auto-fire/main/docker-compose.global.yml -o docker-compose.yml
@@ -53,33 +52,55 @@ curl -fL https://raw.githubusercontent.com/unmev/douyin-auto-fire/main/docker-co
 ghcr.io/unmev/douyin-auto-fire:latest
 ```
 
-## 3. 准备任务配置
+---
 
-创建 `config.json`：
+## 3. 单账号：准备任务配置
+
+创建：
 
 ```bash
 nano config.json
 ```
 
-也可以使用配置生成器生成内容：
+也可以使用配置生成器：
 
-https://douyin-config.pages.dev/
+**https://douyin-config.pages.dev/**
 
-第一次建议只配置 1 个好友和 1 条文字消息，并先确认配置正确。
+一个最简单的配置例如：
 
-## 4. 准备 Cookie
+```json
+{
+  "friends": ["好友昵称"],
+  "messages": [
+    {"type": "text", "value": "续火花 ✨"}
+  ],
+  "send_interval_seconds": {
+    "min": 3,
+    "max": 8
+  },
+  "prevent_duplicates": false
+}
+```
 
-在电脑浏览器登录抖音网页版，然后使用 Cookie-Editor 导出完整 JSON。
+第一次建议只配置 1 个好友和 1 条文字消息。
 
-在部署目录创建：
+---
+
+## 4. 单账号：准备 Cookie
+
+在电脑浏览器登录抖音网页版，使用 Cookie-Editor 导出完整 JSON。
+
+创建：
 
 ```bash
 nano cookie.json
 ```
 
-将导出的完整 Cookie JSON 粘贴进去并保存。
+将完整 Cookie JSON 粘贴进去并保存。
 
-> Cookie 相当于账号登录凭证，请勿上传到 GitHub、CNB 或公开分享。
+> Cookie 相当于账号登录凭证，请勿上传到 GitHub、CNB、Issue 或公开分享。
+
+---
 
 ## 5. 创建 `.env`
 
@@ -128,20 +149,46 @@ RUN_ON_START=true
 RUN_ON_START=false
 ```
 
-## 6. 拉取镜像并启动
+---
+
+## 6. 钉钉通知（可选）
+
+如果希望每次任务结束后通过钉钉接收结果，在 `.env` 中填写：
+
+```env
+DINGTALK_WEBHOOK=https://oapi.dingtalk.com/robot/send?access_token=xxxx
+DINGTALK_SECRET=SECxxxx
+```
+
+两个参数必须同时填写；只填一个会被程序判定为配置错误。
+
+如果不需要通知，保持：
+
+```env
+DINGTALK_WEBHOOK=
+DINGTALK_SECRET=
+```
+
+即可。
+
+通知会包含本次任务模式、成功/失败人数和失败原因。Docker 环境下如果配置的是全局 `.env`，多账号默认都会继承同一个钉钉机器人；如果希望不同账号使用不同机器人，可以在对应账号的环境文件里单独覆盖这两个变量。
+
+---
+
+## 7. 拉取镜像并启动
 
 ```bash
 docker compose pull
 docker compose up -d
 ```
 
-查看容器状态：
+查看状态：
 
 ```bash
 docker compose ps
 ```
 
-查看日志：
+查看实时日志：
 
 ```bash
 docker compose logs -f
@@ -159,25 +206,193 @@ docker.cnb.cool/1mev/douyin-auto-fire:latest
 ghcr.io/unmev/douyin-auto-fire:latest
 ```
 
-## 7. 手动执行一次任务
+---
 
-无需等待定时任务，可以直接在运行中的容器中执行：
+## 8. 第一次运行 Dry Run
 
-```bash
-docker exec -it douyin-auto-fire python run.py
-```
-
-Dry Run：
+不要第一次就直接真实发送。
 
 ```bash
 docker exec -it douyin-auto-fire python run.py --dry-run
 ```
 
-第一次部署强烈建议先运行 Dry Run。
+Dry Run 会检查：
 
-## 8. 宿主机目录
+- Cookie 是否有效；
+- 是否能够进入抖音私信页；
+- 是否能找到目标好友；
+- 任务配置是否正确；
+- 多账号模式下每个启用账号是否能够正常加载。
 
-Docker 部署只需要这些文件：
+Dry Run 不会真实发送消息。
+
+确认没有问题后，再运行：
+
+```bash
+docker exec -it douyin-auto-fire python run.py
+```
+
+---
+
+## 9. 多账号（可选）
+
+Docker 也支持多账号。程序只要检测到：
+
+```text
+/app/config/accounts.json
+```
+
+就会自动从单账号模式切换为多账号模式，并串行执行所有启用账号。一个账号失败不会阻止后面的账号继续运行。
+
+### 9.1 推荐目录结构
+
+宿主机可以整理成：
+
+```text
+douyin-auto-fire/
+├── docker-compose.yml
+├── .env
+├── config.json                  # 单账号模式使用，多账号时可以保留
+├── cookie.json                  # 单账号模式使用，多账号时可以保留
+├── config/
+│   ├── accounts.json
+│   ├── accounts/
+│   │   ├── account1.env
+│   │   └── account2.env
+│   ├── cookies/
+│   │   ├── account1.json
+│   │   └── account2.json
+│   └── tasks/
+│       ├── account1.json
+│       └── account2.json
+└── artifacts/
+```
+
+先创建目录：
+
+```bash
+mkdir -p config/accounts config/cookies config/tasks artifacts
+```
+
+### 9.2 创建 `config/accounts.json`
+
+```bash
+nano config/accounts.json
+```
+
+示例：
+
+```json
+{
+  "accounts": [
+    {
+      "id": "account1",
+      "enabled": true,
+      "env_file": "/app/config/accounts/account1.env"
+    },
+    {
+      "id": "account2",
+      "enabled": true,
+      "env_file": "/app/config/accounts/account2.env"
+    }
+  ]
+}
+```
+
+`id` 主要用于日志和运行产物目录，建议使用简单英文或数字。
+
+如果暂时不想运行某个账号，可以改成：
+
+```json
+"enabled": false
+```
+
+### 9.3 每个账号创建独立环境文件
+
+账号 1：
+
+```bash
+nano config/accounts/account1.env
+```
+
+```env
+DOUYIN_COOKIE=/app/config/cookies/account1.json
+TASK_CONFIG=/app/config/tasks/account1.json
+```
+
+账号 2：
+
+```bash
+nano config/accounts/account2.env
+```
+
+```env
+DOUYIN_COOKIE=/app/config/cookies/account2.json
+TASK_CONFIG=/app/config/tasks/account2.json
+```
+
+如果两个账号都使用全局 `.env` 中的钉钉机器人，不需要重复填写钉钉变量。
+
+如果账号 2 要使用独立机器人，可以在 `account2.env` 中追加：
+
+```env
+DINGTALK_WEBHOOK=https://oapi.dingtalk.com/robot/send?access_token=xxxx
+DINGTALK_SECRET=SECxxxx
+```
+
+### 9.4 保存每个账号 Cookie
+
+```bash
+nano config/cookies/account1.json
+nano config/cookies/account2.json
+```
+
+分别粘贴对应抖音账号导出的完整 Cookie JSON。
+
+### 9.5 保存每个账号任务配置
+
+```bash
+nano config/tasks/account1.json
+nano config/tasks/account2.json
+```
+
+每个账号可以配置完全不同的好友、消息、发送间隔和防重复设置。
+
+### 9.6 测试多账号
+
+```bash
+docker compose up -d
+docker exec -it douyin-auto-fire python run.py --dry-run
+```
+
+日志中会显示类似：
+
+```text
+多账号模式：共 2 个启用账号
+[account1] ...
+[account2] ...
+```
+
+多账号运行产物默认会分开保存：
+
+```text
+artifacts/account1/
+artifacts/account2/
+```
+
+确认 Dry Run 正常后，再执行真实发送：
+
+```bash
+docker exec -it douyin-auto-fire python run.py
+```
+
+> 删除或重命名 `config/accounts.json` 后，程序会恢复到原来的单账号模式。
+
+---
+
+## 10. 宿主机文件说明
+
+单账号最少需要：
 
 ```text
 douyin-auto-fire/
@@ -185,18 +400,20 @@ douyin-auto-fire/
 ├── .env
 ├── config.json
 ├── cookie.json
+├── config/
 └── artifacts/
 ```
 
 其中：
 
 - `docker-compose.yml`：容器配置；
-- `config.json`：发送任务配置；
-- `cookie.json`：抖音 Cookie；
-- `.env`：时区、定时规则等；
+- `config.json`：单账号任务配置；
+- `cookie.json`：单账号 Cookie；
+- `.env`：时区、Cron、Headless、全局钉钉通知等；
+- `config/`：多账号配置目录；
 - `artifacts/`：日志、截图、Trace、历史记录等运行产物。
 
-修改 `config.json` 或 `cookie.json` 后，下次执行任务会直接读取最新内容。
+修改任务配置或 Cookie 后，下次运行会直接读取最新内容。
 
 修改 `.env` 后建议重新创建容器：
 
@@ -204,7 +421,9 @@ douyin-auto-fire/
 docker compose up -d
 ```
 
-## 9. 更新
+---
+
+## 11. 更新
 
 正常更新程序只需要拉取最新版镜像：
 
@@ -213,9 +432,7 @@ docker compose pull
 docker compose up -d
 ```
 
-不需要重新下载整个仓库。
-
-如果以后 Compose 文件本身有更新，可以重新下载一次。
+如果 Compose 文件本身有更新，可以重新下载。
 
 国内：
 
@@ -233,9 +450,11 @@ docker compose pull
 docker compose up -d
 ```
 
-本地的 `config.json`、`cookie.json`、`.env` 和 `artifacts/` 不会因为更新镜像而丢失。
+本地 Cookie、任务配置、`.env` 和 `artifacts/` 不会因为更新镜像而丢失。
 
-## 10. 常用 Docker 命令
+---
+
+## 12. 常用命令
 
 ```bash
 # 启动
@@ -247,14 +466,14 @@ docker compose ps
 # 查看实时日志
 docker compose logs -f
 
+# Dry Run
+docker exec -it douyin-auto-fire python run.py --dry-run
+
+# 立即真实运行一次
+docker exec -it douyin-auto-fire python run.py
+
 # 重启
 docker compose restart
-
-# 停止
-docker compose stop
-
-# 启动已经停止的容器
-docker compose start
 
 # 拉取最新版
 docker compose pull
@@ -266,21 +485,21 @@ docker compose pull && docker compose up -d
 docker compose down
 ```
 
-也可以直接操作容器：
+---
 
-```bash
-docker logs -f douyin-auto-fire
-docker restart douyin-auto-fire
-docker stop douyin-auto-fire
-docker start douyin-auto-fire
-```
+## 13. 查看运行产物
 
-## 11. 查看运行产物
-
-程序写入宿主机：
+单账号通常位于：
 
 ```text
 ./artifacts/
+```
+
+多账号通常位于：
+
+```text
+./artifacts/account1/
+./artifacts/account2/
 ```
 
 可能包含：
@@ -293,19 +512,17 @@ screenshots/
 traces/
 ```
 
-如果发送失败，优先查看：
-
-```bash
-cat artifacts/run.log
-```
-
-或者：
+如果发送失败，可以查看：
 
 ```bash
 docker compose logs --tail=200
 ```
 
-## 12. 国内 / 海外镜像说明
+或对应账号的 `run.log`。
+
+---
+
+## 14. 国内 / 海外镜像说明
 
 国内镜像：
 
@@ -319,14 +536,15 @@ docker.cnb.cool/1mev/douyin-auto-fire:latest
 ghcr.io/unmev/douyin-auto-fire:latest
 ```
 
-GitHub Actions 会在 `main` 分支相关代码更新时自动构建，并同时推送到 GHCR 和 CNB。CNB 代码仓库作为国内镜像源的辅助仓库，用于提供 `docker-compose.yml` 等小文件的国内下载地址；Docker 用户无需克隆完整源码。
+GitHub Actions 会在相关代码更新时自动构建并同时推送到 GHCR 和 CNB。CNB 同时提供国内下载 `docker-compose.yml` 的地址，Docker 用户无需克隆完整源码。
 
-如需锁定某次构建，也可以使用对应的 SHA 标签，而不是一直使用 `latest`。
+---
 
 ## 注意事项
 
-- Cookie 不要写进 Docker 镜像，也不要提交到公开仓库。
+- Cookie、账号环境文件和钉钉机器人密钥都属于敏感信息，不要提交到公开仓库。
 - 同一个抖音账号不要同时运行多个实例，避免重复发送。
+- 多账号会串行执行，不是同时开启多个浏览器并发发送。
 - 服务器网络环境可能触发抖音安全验证。
-- Cookie 失效后需要重新导出并替换本地 `cookie.json`。
+- Cookie 失效后需要重新导出并替换对应账号的 Cookie 文件。
 - `artifacts/` 中的日志、截图和 Trace 可能包含聊天相关信息，请勿随意公开。
